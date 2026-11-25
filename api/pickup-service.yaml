@@ -1,0 +1,616 @@
+openapi: 3.0.3
+info:
+  title: pickup-service
+  version: 1.0.0
+  description: Интервалы выдачи, резервирование места и расписание для сотрудников.
+servers:
+  - url: https://gateway.board-rental.example
+    description: Внешний API через Spring Cloud Gateway
+security:
+  - userToken: []
+tags:
+  - name: public
+    description: Клиентские операции через API Gateway.
+  - name: internal
+    description: Вызовы работника саги в приватной сети.
+paths:
+  /api/v1/pickup-points:
+    get:
+      tags:
+        - public
+      operationId: listPickupPoints
+      summary: Показать пункты выдачи
+      description: Активные пункты сортируются по названию и pointId.
+      parameters:
+        - &a1
+          name: page
+          in: query
+          description: Номер страницы с нуля.
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            description: Номер страницы
+            default: 0
+          example: 0
+        - &a2
+          name: size
+          in: query
+          description: Размер страницы.
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            description: Размер страницы
+            maximum: 100
+            default: 20
+          example: 20
+      responses:
+        "200":
+          description: Страница пунктов выдачи
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickupPointPage"
+              example:
+                page: 0
+                size: 20
+                totalElements: 1
+                items:
+                  - pointId: 138bcbd1-96dc-42ff-aafc-827f5ac4e521
+                    name: Пункт на Арбате
+                    address: Москва, ул. Арбат, 15
+        "400": &a3
+          description: Некорректный запрос
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/validation-error
+                title: Некорректный запрос
+                status: 400
+                code: VALIDATION_ERROR
+                detail: Проверьте параметры и обязательные поля.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+        "401": &a4
+          description: Требуется токен
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/unauthenticated
+                title: Требуется токен
+                status: 401
+                code: UNAUTHENTICATED
+                detail: Предъявите действительный JWT.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+        "403": &a5
+          description: Доступ запрещён
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/access-denied
+                title: Доступ запрещён
+                status: 403
+                code: ACCESS_DENIED
+                detail: Токен не даёт права на выполнение операции.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+        "429": &a6
+          description: Превышен лимит запросов
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/rate-limited
+                title: Превышен лимит запросов
+                status: 429
+                code: RATE_LIMITED
+                detail: Повторите запрос позже.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+        "503": &a7
+          description: Сервис временно недоступен
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/service-unavailable
+                title: Сервис временно недоступен
+                status: 503
+                code: SERVICE_UNAVAILABLE
+                detail: Повторите запрос позже.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+  /api/v1/pickup-slots:
+    get:
+      tags:
+        - public
+      operationId: listPickupSlots
+      summary: Найти интервалы выдачи
+      description: Возвращает интервалы указанного пункта за день с запасом не меньше двух минут до начала.
+        Порядок по startsAt и slotId.
+      parameters:
+        - name: pointId
+          in: query
+          description: Идентификатор пункта
+          required: true
+          schema:
+            type: string
+            description: Идентификатор пункта
+            format: uuid
+          example: 138bcbd1-96dc-42ff-aafc-827f5ac4e521
+        - name: date
+          in: query
+          description: Дата выдачи по Москве
+          required: true
+          schema:
+            type: string
+            description: Дата выдачи по Москве
+            format: date
+          example: 2026-12-01
+        - *a1
+        - *a2
+      responses:
+        "200":
+          description: Страница интервалов
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SlotPage"
+              example:
+                page: 0
+                size: 20
+                totalElements: 1
+                items:
+                  - pointId: 138bcbd1-96dc-42ff-aafc-827f5ac4e521
+                    slotId: 08a54ab1-a528-4ced-964b-294c6ba61b61
+                    startsAt: 2026-12-01T17:00:00+03:00
+                    endsAt: 2026-12-01T17:30:00+03:00
+                    remaining: 3
+        "400": *a3
+        "401": *a4
+        "403": *a5
+        "429": *a6
+        "503": *a7
+  /api/v1/pickup-roster:
+    get:
+      tags:
+        - public
+      operationId: listPickupRoster
+      summary: Показать подтверждённые выдачи
+      description: Требуется роль pickup-staff и доступ к пункту. Порядок по startsAt и bookingId. Бронь
+        появляется после события booking.confirmed.
+      parameters:
+        - name: pointId
+          in: query
+          description: Идентификатор пункта
+          required: true
+          schema:
+            type: string
+            description: Идентификатор пункта
+            format: uuid
+          example: 138bcbd1-96dc-42ff-aafc-827f5ac4e521
+        - name: date
+          in: query
+          description: Дата выдачи по Москве
+          required: true
+          schema:
+            type: string
+            description: Дата выдачи по Москве
+            format: date
+          example: 2026-12-01
+        - *a1
+        - *a2
+      responses:
+        "200":
+          description: Страница подтверждённых выдач
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RosterPage"
+              example:
+                page: 0
+                size: 20
+                totalElements: 1
+                items:
+                  - bookingId: c3e2a0b9-e8e0-4460-ab16-d6cdcd487fb1
+                    gameId: e9dc293a-c426-44bb-99fb-97b57a406138
+                    copyId: 40cd218d-c80a-4d82-9686-d668aff44d10
+                    slotId: 08a54ab1-a528-4ced-964b-294c6ba61b61
+                    startsAt: 2026-12-01T17:00:00+03:00
+                    endsAt: 2026-12-01T17:30:00+03:00
+        "400": *a3
+        "401": *a4
+        "403": *a5
+        "429": *a6
+        "503": *a7
+  /internal/v1/pickup-reservations/{bookingId}:
+    put:
+      tags:
+        - internal
+      operationId: reservePickupSlot
+      summary: Занять место в интервале
+      description: Проверяет пункт, дату, запас от двух минут до начала и вместимость. Повтор с исходным ключом
+        возвращает прежний резерв, пока шаг открыт.
+      parameters: &a8
+        - name: bookingId
+          in: path
+          description: Идентификатор брони
+          required: true
+          schema:
+            type: string
+            description: Идентификатор брони
+            format: uuid
+          example: c3e2a0b9-e8e0-4460-ab16-d6cdcd487fb1
+        - name: Idempotency-Key
+          in: header
+          description: UUID операции. Повтор с тем же телом использует исходный ключ.
+          required: true
+          schema:
+            type: string
+            description: Стабильный ключ запроса
+            format: uuid
+          example: 4aea3ce4-98b0-4552-aa18-cf38544b2eef
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReservePickupRequest"
+            example:
+              pointId: 138bcbd1-96dc-42ff-aafc-827f5ac4e521
+              slotId: 08a54ab1-a528-4ced-964b-294c6ba61b61
+              pickupDate: 2026-12-01
+      responses:
+        "200":
+          description: Время выдачи зарезервировано
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickupReservation"
+              example:
+                bookingId: c3e2a0b9-e8e0-4460-ab16-d6cdcd487fb1
+                pointId: 138bcbd1-96dc-42ff-aafc-827f5ac4e521
+                slotId: 08a54ab1-a528-4ced-964b-294c6ba61b61
+                startsAt: 2026-12-01T17:00:00+03:00
+                endsAt: 2026-12-01T17:30:00+03:00
+        "400": *a3
+        "401": *a4
+        "403": *a5
+        "404":
+          description: Интервал не найден
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/slot-not-found
+                title: Интервал не найден
+                status: 404
+                code: SLOT_NOT_FOUND
+                detail: Указанный интервал выдачи не существует.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+        "409":
+          description: Свободных мест нет. Интервал недоступен по времени. Интервал не подходит. Шаг брони закрыт.
+            Ключ операции уже использован
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              examples:
+                SLOT_FULL:
+                  summary: Свободных мест нет
+                  value:
+                    type: https://problem.board-rental.example/slot-full
+                    title: Свободных мест нет
+                    status: 409
+                    code: SLOT_FULL
+                    detail: В выбранном интервале исчерпана вместимость.
+                    traceId: b16c97c0001d4b3a874d357dfe714c03
+                SLOT_EXPIRED:
+                  summary: Интервал недоступен по времени
+                  value:
+                    type: https://problem.board-rental.example/slot-expired
+                    title: Интервал недоступен по времени
+                    status: 409
+                    code: SLOT_EXPIRED
+                    detail: До начала выдачи должно оставаться не меньше двух минут.
+                    traceId: b16c97c0001d4b3a874d357dfe714c03
+                SLOT_MISMATCH:
+                  summary: Интервал не подходит
+                  value:
+                    type: https://problem.board-rental.example/slot-mismatch
+                    title: Интервал не подходит
+                    status: 409
+                    code: SLOT_MISMATCH
+                    detail: Дата или пункт выдачи не совпадает с заявкой.
+                    traceId: b16c97c0001d4b3a874d357dfe714c03
+                RESERVATION_CLOSED:
+                  summary: Шаг брони закрыт
+                  value:
+                    type: https://problem.board-rental.example/reservation-closed
+                    title: Шаг брони закрыт
+                    status: 409
+                    code: RESERVATION_CLOSED
+                    detail: Резерв с таким bookingId был отменён.
+                    traceId: b16c97c0001d4b3a874d357dfe714c03
+                IDEMPOTENCY_CONFLICT:
+                  summary: Ключ операции уже использован
+                  value: &a9
+                    type: https://problem.board-rental.example/idempotency-conflict
+                    title: Ключ операции уже использован
+                    status: 409
+                    code: IDEMPOTENCY_CONFLICT
+                    detail: Этот ключ ранее был использован для другого тела.
+                    traceId: b16c97c0001d4b3a874d357dfe714c03
+        "503": *a7
+      servers:
+        - &a10
+          url: https://pickup-service.board-rental.internal
+          description: Внутренняя сеть сервисов
+      security:
+        - serviceToken: []
+    delete:
+      tags:
+        - internal
+      operationId: releasePickupSlot
+      summary: Освободить место в интервале
+      description: Закрывает шаг по bookingId даже при отсутствии активного резерва. Использует отдельный ключ
+        операции.
+      parameters: *a8
+      responses:
+        "204":
+          description: Резерв снят. Ответ содержит только статус 204 и заголовки. Повтор возвращает 204.
+        "400": *a3
+        "401": *a4
+        "403": *a5
+        "409":
+          description: Ключ операции уже использован
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example: *a9
+        "503": *a7
+      servers:
+        - *a10
+      security:
+        - serviceToken: []
+components:
+  securitySchemes:
+    userToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OIDC-токен пользователя Keycloak.
+    serviceToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Токен client credentials с областью booking:orchestrate.
+  schemas:
+    Problem:
+      type: object
+      required:
+        - type
+        - title
+        - status
+        - code
+        - detail
+        - traceId
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          description: URI категории ошибки
+          format: uri
+        title:
+          type: string
+          description: Короткое описание причины
+        status:
+          type: integer
+          minimum: 400
+          description: Код HTTP
+          maximum: 599
+        code:
+          type: string
+          description: Стабильный код для клиента
+          pattern: ^[A-Z][A-Z0-9_]*$
+        detail:
+          type: string
+          description: Описание ошибки в данном запросе
+        traceId:
+          type: string
+          description: Идентификатор трассировки
+          pattern: ^[0-9a-f]{32}$
+    PickupPoint:
+      type: object
+      required:
+        - pointId
+        - name
+        - address
+      additionalProperties: false
+      properties:
+        pointId: &a11
+          type: string
+          description: Идентификатор пункта
+          format: uuid
+        name:
+          type: string
+          description: Название пункта
+        address:
+          type: string
+          description: Публичный адрес
+    PickupPointPage:
+      type: object
+      required:
+        - page
+        - size
+        - totalElements
+        - items
+      additionalProperties: false
+      properties:
+        page:
+          type: integer
+          minimum: 0
+          description: Номер страницы
+        size:
+          type: integer
+          minimum: 1
+          description: Размер страницы
+          maximum: 100
+        totalElements:
+          type: integer
+          minimum: 0
+          description: Количество результатов
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PickupPoint"
+          description: Активные пункты выдачи
+    Slot:
+      type: object
+      required:
+        - pointId
+        - slotId
+        - startsAt
+        - endsAt
+        - remaining
+      additionalProperties: false
+      properties:
+        pointId: *a11
+        slotId: &a12
+          type: string
+          description: Идентификатор интервала
+          format: uuid
+        startsAt: &a13
+          type: string
+          description: Время начала выдачи
+          format: date-time
+        endsAt: &a14
+          type: string
+          description: Время окончания выдачи
+          format: date-time
+        remaining:
+          type: integer
+          minimum: 0
+          description: Свободные места в интервале
+    SlotPage:
+      type: object
+      required:
+        - page
+        - size
+        - totalElements
+        - items
+      additionalProperties: false
+      properties:
+        page:
+          type: integer
+          minimum: 0
+          description: Номер страницы
+        size:
+          type: integer
+          minimum: 1
+          description: Размер страницы
+          maximum: 100
+        totalElements:
+          type: integer
+          minimum: 0
+          description: Количество результатов
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Slot"
+          description: Интервалы выдачи
+    RosterEntry:
+      type: object
+      required:
+        - bookingId
+        - gameId
+        - copyId
+        - slotId
+        - startsAt
+        - endsAt
+      additionalProperties: false
+      properties:
+        bookingId:
+          type: string
+          description: Идентификатор заявки
+          format: uuid
+        gameId:
+          type: string
+          description: Идентификатор игры
+          format: uuid
+        copyId:
+          type: string
+          description: Идентификатор экземпляра
+          format: uuid
+        slotId: *a12
+        startsAt: *a13
+        endsAt: *a14
+    RosterPage:
+      type: object
+      required:
+        - page
+        - size
+        - totalElements
+        - items
+      additionalProperties: false
+      properties:
+        page:
+          type: integer
+          minimum: 0
+          description: Номер страницы
+        size:
+          type: integer
+          minimum: 1
+          description: Размер страницы
+          maximum: 100
+        totalElements:
+          type: integer
+          minimum: 0
+          description: Количество результатов
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RosterEntry"
+          description: Подтверждённые выдачи
+    ReservePickupRequest:
+      type: object
+      required:
+        - pointId
+        - slotId
+        - pickupDate
+      additionalProperties: false
+      properties:
+        pointId: *a11
+        slotId: *a12
+        pickupDate:
+          type: string
+          description: Дата начала проката по Москве
+          format: date
+    PickupReservation:
+      type: object
+      required:
+        - bookingId
+        - pointId
+        - slotId
+        - startsAt
+        - endsAt
+      additionalProperties: false
+      properties:
+        bookingId:
+          type: string
+          description: Идентификатор брони
+          format: uuid
+        pointId: *a11
+        slotId: *a12
+        startsAt: *a13
+        endsAt: *a14

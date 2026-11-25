@@ -1,0 +1,15 @@
+extends:
+  - recommended
+rules:
+  info-license: off
+apis:
+  catalog:
+    root: api/catalog-service.yaml
+  inventory:
+    root: api/inventory-service.yaml
+  booking:
+    root: api/booking-service.yaml
+  pickup:
+    root: api/pickup-service.yaml
+  notification:
+    root: api/notification-service.yaml

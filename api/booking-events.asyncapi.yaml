@@ -1,0 +1,275 @@
+asyncapi: 3.1.0
+info:
+  title: События проката настольных игр
+  version: 1.0.0
+  description: Обмен фактами между бронированием, выдачей и уведомлениями.
+defaultContentType: application/json
+servers:
+  kafka:
+    host: kafka.board-rental.internal:9093
+    protocol: kafka-secure
+    description: Kafka внутри сервисной сети.
+channels:
+  bookingEvents:
+    address: rental.booking.events.v1
+    title: Результат оформления брони
+    description: Ключ Kafka равен bookingId. Издатель booking-service.
+    servers:
+      - $ref: "#/servers/kafka"
+    messages:
+      BookingConfirmed:
+        $ref: "#/components/messages/BookingConfirmed"
+      BookingCancelled:
+        $ref: "#/components/messages/BookingCancelled"
+operations:
+  publishBookingOutcome:
+    action: send
+    channel: &a1
+      $ref: "#/channels/bookingEvents"
+    description: booking-service публикует завершённую сагу через outbox.
+    messages:
+      - $ref: "#/channels/bookingEvents/messages/BookingConfirmed"
+      - $ref: "#/channels/bookingEvents/messages/BookingCancelled"
+  consumePickupConfirmation:
+    action: receive
+    channel: *a1
+    description: pickup-service добавляет подтверждённую выдачу, пропуская booking.cancelled.
+    bindings:
+      kafka:
+        groupId:
+          type: string
+          enum:
+            - pickup-service
+        bindingVersion: 0.5.0
+    messages:
+      - $ref: "#/channels/bookingEvents/messages/BookingConfirmed"
+  consumeNotificationOutcome:
+    action: receive
+    channel: *a1
+    description: notification-service создаёт уведомление о подтверждении или отмене.
+    bindings:
+      kafka:
+        groupId:
+          type: string
+          enum:
+            - notification-service
+        bindingVersion: 0.5.0
+    messages:
+      - $ref: "#/channels/bookingEvents/messages/BookingConfirmed"
+      - $ref: "#/channels/bookingEvents/messages/BookingCancelled"
+components:
+  messages:
+    BookingConfirmed:
+      name: booking.confirmed
+      title: Бронь подтверждена
+      description: Оба резерва установлены. Подписчики pickup-service и notification-service.
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlationId
+      bindings:
+        kafka:
+          key:
+            type: string
+            description: Идентификатор брони
+            format: uuid
+          bindingVersion: 0.5.0
+      payload:
+        type: object
+        required:
+          - eventId
+          - eventType
+          - occurredAt
+          - schemaVersion
+          - correlationId
+          - payload
+        additionalProperties: false
+        properties:
+          eventId:
+            type: string
+            description: Уникальный идентификатор события. Сохраняется при повторной отправке.
+            format: uuid
+          eventType:
+            type: string
+            description: Тип события
+            enum:
+              - booking.confirmed
+          occurredAt:
+            type: string
+            description: Момент записи состояния брони в UTC
+            format: date-time
+          schemaVersion:
+            type: integer
+            enum:
+              - 1
+            description: Версия схемы конверта
+          correlationId:
+            type: string
+            description: Идентификатор саги. Совпадает с bookingId.
+            format: uuid
+          payload:
+            type: object
+            required:
+              - bookingId
+              - userId
+              - gameId
+              - pointId
+              - slotId
+              - copyId
+              - startsOn
+              - endsOn
+              - startsAt
+              - endsAt
+              - totalPriceKopecks
+              - currency
+            additionalProperties: false
+            properties:
+              bookingId: &a2
+                type: string
+                description: Идентификатор заявки и ключ Kafka
+                format: uuid
+              userId: &a3
+                type: string
+                description: OIDC sub получателя уведомления
+                format: uuid
+              gameId:
+                type: string
+                description: Идентификатор игры
+                format: uuid
+              pointId:
+                type: string
+                description: Идентификатор пункта
+                format: uuid
+              slotId:
+                type: string
+                description: Идентификатор интервала
+                format: uuid
+              copyId:
+                type: string
+                description: Идентификатор экземпляра
+                format: uuid
+              startsOn:
+                type: string
+                description: Дата начала включительно по Москве
+                format: date
+              endsOn:
+                type: string
+                description: Дата окончания исключительно по Москве
+                format: date
+              startsAt:
+                type: string
+                description: Время начала выдачи
+                format: date-time
+              endsAt:
+                type: string
+                description: Время окончания выдачи
+                format: date-time
+              totalPriceKopecks:
+                type: integer
+                minimum: 0
+                description: Сумма за весь прокат в копейках
+                format: int64
+              currency:
+                type: string
+                description: Код валюты
+                enum:
+                  - RUB
+      examples:
+        - name: Example
+          payload:
+            eventId: fc96a00f-3528-4e95-b899-0edfb7ecd11c
+            eventType: booking.confirmed
+            occurredAt: 2026-11-28T10:00:02Z
+            schemaVersion: 1
+            correlationId: c3e2a0b9-e8e0-4460-ab16-d6cdcd487fb1
+            payload:
+              bookingId: c3e2a0b9-e8e0-4460-ab16-d6cdcd487fb1
+              userId: 817dd73d-633e-4acd-aa8c-aca61b9e3d8a
+              gameId: e9dc293a-c426-44bb-99fb-97b57a406138
+              pointId: 138bcbd1-96dc-42ff-aafc-827f5ac4e521
+              startsOn: 2026-12-01
+              endsOn: 2026-12-04
+              slotId: 08a54ab1-a528-4ced-964b-294c6ba61b61
+              copyId: 40cd218d-c80a-4d82-9686-d668aff44d10
+              startsAt: 2026-12-01T17:00:00+03:00
+              endsAt: 2026-12-01T17:30:00+03:00
+              totalPriceKopecks: 105000
+              currency: RUB
+    BookingCancelled:
+      name: booking.cancelled
+      title: Бронь отменена
+      description: Компенсации завершены. Подписчик notification-service.
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlationId
+      bindings:
+        kafka:
+          key:
+            type: string
+            description: Идентификатор брони
+            format: uuid
+          bindingVersion: 0.5.0
+      payload:
+        type: object
+        required:
+          - eventId
+          - eventType
+          - occurredAt
+          - schemaVersion
+          - correlationId
+          - payload
+        additionalProperties: false
+        properties:
+          eventId:
+            type: string
+            description: Уникальный идентификатор события. Сохраняется при повторной отправке.
+            format: uuid
+          eventType:
+            type: string
+            description: Тип события
+            enum:
+              - booking.cancelled
+          occurredAt:
+            type: string
+            description: Момент записи состояния брони в UTC
+            format: date-time
+          schemaVersion:
+            type: integer
+            enum:
+              - 1
+            description: Версия схемы конверта
+          correlationId:
+            type: string
+            description: Идентификатор саги. Совпадает с bookingId.
+            format: uuid
+          payload:
+            type: object
+            required:
+              - bookingId
+              - userId
+              - failureCode
+            additionalProperties: false
+            properties:
+              bookingId: *a2
+              userId: *a3
+              failureCode:
+                type: string
+                description: Причина отмены. Присутствует в состояниях CANCELLING и CANCELLED.
+                enum:
+                  - GAME_UNAVAILABLE
+                  - SLOT_UNAVAILABLE
+                  - SLOT_FULL
+                  - SLOT_EXPIRED
+                  - SLOT_MISMATCH
+                  - DEPENDENCY_TIMEOUT
+      examples:
+        - name: Example
+          payload:
+            eventId: 1360dd96-0fd4-4584-a229-78b97ad899ec
+            eventType: booking.cancelled
+            occurredAt: 2026-11-28T10:00:02Z
+            schemaVersion: 1
+            correlationId: c3e2a0b9-e8e0-4460-ab16-d6cdcd487fb1
+            payload:
+              bookingId: c3e2a0b9-e8e0-4460-ab16-d6cdcd487fb1
+              userId: 817dd73d-633e-4acd-aa8c-aca61b9e3d8a
+              failureCode: SLOT_FULL

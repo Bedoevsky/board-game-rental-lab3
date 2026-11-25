@@ -1,0 +1,372 @@
+openapi: 3.0.3
+info:
+  title: inventory-service
+  version: 1.0.0
+  description: Доступность и резервирование экземпляров настольных игр.
+servers:
+  - url: https://gateway.board-rental.example
+    description: Внешний API через Spring Cloud Gateway
+security:
+  - userToken: []
+tags:
+  - name: public
+    description: Клиентские операции через API Gateway.
+  - name: internal
+    description: Вызовы работника саги в приватной сети.
+paths:
+  /api/v1/availability:
+    get:
+      tags:
+        - public
+      operationId: checkAvailability
+      summary: Проверить доступность игры
+      description: Проверяет период от 1 до 7 дней. Ответ отражает остаток на момент чтения.
+      parameters:
+        - name: gameId
+          in: query
+          description: Идентификатор игры
+          required: true
+          schema:
+            type: string
+            description: Идентификатор игры
+            format: uuid
+          example: e9dc293a-c426-44bb-99fb-97b57a406138
+        - name: pointId
+          in: query
+          description: Идентификатор пункта
+          required: true
+          schema:
+            type: string
+            description: Идентификатор пункта
+            format: uuid
+          example: 138bcbd1-96dc-42ff-aafc-827f5ac4e521
+        - name: startsOn
+          in: query
+          description: Дата начала включительно
+          required: true
+          schema:
+            type: string
+            description: Дата начала включительно
+            format: date
+          example: 2026-12-01
+        - name: endsOn
+          in: query
+          description: Дата окончания исключительно
+          required: true
+          schema:
+            type: string
+            description: Дата окончания исключительно
+            format: date
+          example: 2026-12-04
+      responses:
+        "200":
+          description: Оценка доступности
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Availability"
+              example:
+                gameId: e9dc293a-c426-44bb-99fb-97b57a406138
+                pointId: 138bcbd1-96dc-42ff-aafc-827f5ac4e521
+                startsOn: 2026-12-01
+                endsOn: 2026-12-04
+                available: true
+        "400": &a1
+          description: Некорректный запрос
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/validation-error
+                title: Некорректный запрос
+                status: 400
+                code: VALIDATION_ERROR
+                detail: Проверьте параметры и обязательные поля.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+        "401": &a2
+          description: Требуется токен
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/unauthenticated
+                title: Требуется токен
+                status: 401
+                code: UNAUTHENTICATED
+                detail: Предъявите действительный JWT.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+        "403": &a3
+          description: Доступ запрещён
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/access-denied
+                title: Доступ запрещён
+                status: 403
+                code: ACCESS_DENIED
+                detail: Токен не даёт права на выполнение операции.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+        "429":
+          description: Превышен лимит запросов
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/rate-limited
+                title: Превышен лимит запросов
+                status: 429
+                code: RATE_LIMITED
+                detail: Повторите запрос позже.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+        "503": &a4
+          description: Сервис временно недоступен
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/service-unavailable
+                title: Сервис временно недоступен
+                status: 503
+                code: SERVICE_UNAVAILABLE
+                detail: Повторите запрос позже.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+  /internal/v1/inventory-reservations/{bookingId}:
+    put:
+      tags:
+        - internal
+      operationId: reserveInventoryCopy
+      summary: Зарезервировать экземпляр
+      description: Повтор с прежним ключом возвращает тот же резерв, пока шаг открыт. Закрытый шаг возвращает
+        RESERVATION_CLOSED.
+      parameters: &a5
+        - name: bookingId
+          in: path
+          description: Идентификатор брони
+          required: true
+          schema:
+            type: string
+            description: Идентификатор брони
+            format: uuid
+          example: c3e2a0b9-e8e0-4460-ab16-d6cdcd487fb1
+        - name: Idempotency-Key
+          in: header
+          description: UUID операции. Повтор с тем же телом использует исходный ключ.
+          required: true
+          schema:
+            type: string
+            description: Стабильный ключ запроса
+            format: uuid
+          example: 4aea3ce4-98b0-4552-aa18-cf38544b2eef
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReserveInventoryRequest"
+            example:
+              gameId: e9dc293a-c426-44bb-99fb-97b57a406138
+              pointId: 138bcbd1-96dc-42ff-aafc-827f5ac4e521
+              startsOn: 2026-12-01
+              endsOn: 2026-12-04
+      responses:
+        "200":
+          description: Резерв установлен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryReservation"
+              example:
+                bookingId: c3e2a0b9-e8e0-4460-ab16-d6cdcd487fb1
+                copyId: 40cd218d-c80a-4d82-9686-d668aff44d10
+                gameId: e9dc293a-c426-44bb-99fb-97b57a406138
+                pointId: 138bcbd1-96dc-42ff-aafc-827f5ac4e521
+                startsOn: 2026-12-01
+                endsOn: 2026-12-04
+        "400": *a1
+        "401": *a2
+        "403": *a3
+        "409":
+          description: Свободных экземпляров нет. Шаг брони закрыт. Ключ операции уже использован
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              examples:
+                NO_COPY:
+                  summary: Свободных экземпляров нет
+                  value:
+                    type: https://problem.board-rental.example/no-copy
+                    title: Свободных экземпляров нет
+                    status: 409
+                    code: NO_COPY
+                    detail: На этот период в пункте нет свободных экземпляров.
+                    traceId: b16c97c0001d4b3a874d357dfe714c03
+                RESERVATION_CLOSED:
+                  summary: Шаг брони закрыт
+                  value:
+                    type: https://problem.board-rental.example/reservation-closed
+                    title: Шаг брони закрыт
+                    status: 409
+                    code: RESERVATION_CLOSED
+                    detail: Резерв с таким bookingId был отменён.
+                    traceId: b16c97c0001d4b3a874d357dfe714c03
+                IDEMPOTENCY_CONFLICT:
+                  summary: Ключ операции уже использован
+                  value: &a6
+                    type: https://problem.board-rental.example/idempotency-conflict
+                    title: Ключ операции уже использован
+                    status: 409
+                    code: IDEMPOTENCY_CONFLICT
+                    detail: Этот ключ ранее был использован для другого тела.
+                    traceId: b16c97c0001d4b3a874d357dfe714c03
+        "503": *a4
+      servers:
+        - &a7
+          url: https://inventory-service.board-rental.internal
+          description: Внутренняя сеть сервисов
+      security:
+        - serviceToken: []
+    delete:
+      tags:
+        - internal
+      operationId: releaseInventoryCopy
+      summary: Снять резерв экземпляра
+      description: Закрывает шаг по bookingId даже при отсутствии активного резерва. Использует отдельный ключ
+        операции.
+      parameters: *a5
+      responses:
+        "204":
+          description: Резерв снят. Ответ содержит только статус 204 и заголовки. Повтор возвращает 204.
+        "400": *a1
+        "401": *a2
+        "403": *a3
+        "409":
+          description: Ключ операции уже использован
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example: *a6
+        "503": *a4
+      servers:
+        - *a7
+      security:
+        - serviceToken: []
+components:
+  securitySchemes:
+    userToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OIDC-токен пользователя Keycloak.
+    serviceToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Токен client credentials с областью booking:orchestrate.
+  schemas:
+    Problem:
+      type: object
+      required:
+        - type
+        - title
+        - status
+        - code
+        - detail
+        - traceId
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          description: URI категории ошибки
+          format: uri
+        title:
+          type: string
+          description: Короткое описание причины
+        status:
+          type: integer
+          minimum: 400
+          description: Код HTTP
+          maximum: 599
+        code:
+          type: string
+          description: Стабильный код для клиента
+          pattern: ^[A-Z][A-Z0-9_]*$
+        detail:
+          type: string
+          description: Описание ошибки в данном запросе
+        traceId:
+          type: string
+          description: Идентификатор трассировки
+          pattern: ^[0-9a-f]{32}$
+    Availability:
+      type: object
+      required:
+        - gameId
+        - pointId
+        - startsOn
+        - endsOn
+        - available
+      additionalProperties: false
+      properties:
+        gameId: &a8
+          type: string
+          description: Идентификатор игры
+          format: uuid
+        pointId: &a9
+          type: string
+          description: Идентификатор пункта выдачи
+          format: uuid
+        startsOn: &a10
+          type: string
+          description: Дата начала включительно по Москве
+          format: date
+        endsOn: &a11
+          type: string
+          description: Дата окончания исключительно по Москве
+          format: date
+        available:
+          type: boolean
+          description: Найден хотя бы один экземпляр
+    ReserveInventoryRequest:
+      type: object
+      required:
+        - gameId
+        - pointId
+        - startsOn
+        - endsOn
+      additionalProperties: false
+      properties:
+        gameId: *a8
+        pointId: *a9
+        startsOn: *a10
+        endsOn: *a11
+    InventoryReservation:
+      type: object
+      required:
+        - bookingId
+        - copyId
+        - gameId
+        - pointId
+        - startsOn
+        - endsOn
+      additionalProperties: false
+      properties:
+        bookingId:
+          type: string
+          description: Идентификатор брони
+          format: uuid
+        copyId:
+          type: string
+          description: Идентификатор экземпляра
+          format: uuid
+        gameId: *a8
+        pointId: *a9
+        startsOn: *a10
+        endsOn: *a11

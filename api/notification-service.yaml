@@ -1,0 +1,236 @@
+openapi: 3.0.3
+info:
+  title: notification-service
+  version: 1.0.0
+  description: Уведомления клиента о результате бронирования.
+servers:
+  - url: https://gateway.board-rental.example
+    description: Внешний API через Spring Cloud Gateway
+security:
+  - userToken: []
+tags:
+  - name: public
+    description: Клиентские операции через API Gateway.
+paths:
+  /api/v1/notifications:
+    get:
+      tags:
+        - public
+      operationId: listNotifications
+      summary: Показать уведомления клиента
+      description: Доступны записи владельца JWT. Сортировка от новых к старым по createdAt и notificationId.
+      parameters:
+        - name: page
+          in: query
+          description: Номер страницы с нуля.
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            description: Номер страницы
+            default: 0
+          example: 0
+        - name: size
+          in: query
+          description: Размер страницы.
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            description: Размер страницы
+            maximum: 100
+            default: 20
+          example: 20
+      responses:
+        "200":
+          description: Страница уведомлений
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPage"
+              example:
+                page: 0
+                size: 20
+                totalElements: 1
+                items:
+                  - notificationId: 337c33c8-956c-4540-90fd-184fa13d0bf9
+                    bookingId: c3e2a0b9-e8e0-4460-ab16-d6cdcd487fb1
+                    type: BOOKING_CONFIRMED
+                    message: Бронь подтверждена. Игра будет доступна для выдачи 1 декабря с 17:00 до 17:30.
+                    createdAt: 2026-11-28T10:00:04Z
+                    telegramStatus: SENT
+        "400":
+          description: Некорректный запрос
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/validation-error
+                title: Некорректный запрос
+                status: 400
+                code: VALIDATION_ERROR
+                detail: Проверьте параметры и обязательные поля.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+        "401":
+          description: Требуется токен
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/unauthenticated
+                title: Требуется токен
+                status: 401
+                code: UNAUTHENTICATED
+                detail: Предъявите действительный JWT.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+        "403":
+          description: Доступ запрещён
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/access-denied
+                title: Доступ запрещён
+                status: 403
+                code: ACCESS_DENIED
+                detail: Токен не даёт права на выполнение операции.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+        "429":
+          description: Превышен лимит запросов
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/rate-limited
+                title: Превышен лимит запросов
+                status: 429
+                code: RATE_LIMITED
+                detail: Повторите запрос позже.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+        "503":
+          description: Сервис временно недоступен
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/service-unavailable
+                title: Сервис временно недоступен
+                status: 503
+                code: SERVICE_UNAVAILABLE
+                detail: Повторите запрос позже.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+components:
+  securitySchemes:
+    userToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OIDC-токен пользователя Keycloak.
+  schemas:
+    Problem:
+      type: object
+      required:
+        - type
+        - title
+        - status
+        - code
+        - detail
+        - traceId
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          description: URI категории ошибки
+          format: uri
+        title:
+          type: string
+          description: Короткое описание причины
+        status:
+          type: integer
+          minimum: 400
+          description: Код HTTP
+          maximum: 599
+        code:
+          type: string
+          description: Стабильный код для клиента
+          pattern: ^[A-Z][A-Z0-9_]*$
+        detail:
+          type: string
+          description: Описание ошибки в данном запросе
+        traceId:
+          type: string
+          description: Идентификатор трассировки
+          pattern: ^[0-9a-f]{32}$
+    Notification:
+      type: object
+      required:
+        - notificationId
+        - bookingId
+        - type
+        - message
+        - createdAt
+        - telegramStatus
+      additionalProperties: false
+      properties:
+        notificationId:
+          type: string
+          description: Идентификатор уведомления
+          format: uuid
+        bookingId:
+          type: string
+          description: Идентификатор заявки
+          format: uuid
+        type:
+          type: string
+          description: Причина уведомления
+          enum:
+            - BOOKING_CONFIRMED
+            - BOOKING_CANCELLED
+        message:
+          type: string
+          description: Текст для клиента
+        createdAt:
+          type: string
+          description: Момент записи в кабинет
+          format: date-time
+        telegramStatus:
+          type: string
+          description: Статус доставки в Telegram
+          enum:
+            - NOT_LINKED
+            - PENDING
+            - SENT
+            - FAILED
+    NotificationPage:
+      type: object
+      required:
+        - page
+        - size
+        - totalElements
+        - items
+      additionalProperties: false
+      properties:
+        page:
+          type: integer
+          minimum: 0
+          description: Номер страницы
+        size:
+          type: integer
+          minimum: 1
+          description: Размер страницы
+          maximum: 100
+        totalElements:
+          type: integer
+          minimum: 0
+          description: Количество результатов
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Notification"
+          description: Входящие уведомления

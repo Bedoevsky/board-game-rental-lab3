@@ -1,0 +1,376 @@
+openapi: 3.0.3
+info:
+  title: booking-service
+  version: 1.0.0
+  description: Приём и отслеживание заявок на бронирование настольных игр.
+servers:
+  - url: https://gateway.board-rental.example
+    description: Внешний API через Spring Cloud Gateway
+security:
+  - userToken: []
+tags:
+  - name: public
+    description: Клиентские операции через API Gateway.
+paths:
+  /api/v1/bookings:
+    post:
+      tags:
+        - public
+      operationId: createBooking
+      summary: Принять заявку на бронь
+      description: Создаёт заявку с идентификатором клиента из JWT и запускает сагу. Период от 1 до 7 дней.
+        Ключ повтора связан с владельцем заявки.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          description: UUID операции. Повтор с тем же телом использует исходный ключ.
+          required: true
+          schema:
+            type: string
+            description: Стабильный ключ запроса
+            format: uuid
+          example: 4aea3ce4-98b0-4552-aa18-cf38544b2eef
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBookingRequest"
+            example:
+              gameId: e9dc293a-c426-44bb-99fb-97b57a406138
+              pointId: 138bcbd1-96dc-42ff-aafc-827f5ac4e521
+              startsOn: 2026-12-01
+              endsOn: 2026-12-04
+              slotId: 08a54ab1-a528-4ced-964b-294c6ba61b61
+      responses:
+        "202":
+          description: Заявка принята
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookingAccepted"
+              example:
+                bookingId: c3e2a0b9-e8e0-4460-ab16-d6cdcd487fb1
+                status: PENDING
+                statusUrl: /api/v1/bookings/c3e2a0b9-e8e0-4460-ab16-d6cdcd487fb1
+          headers:
+            Location:
+              description: Относительный URL ресурса статуса
+              schema:
+                type: string
+              example: /api/v1/bookings/c3e2a0b9-e8e0-4460-ab16-d6cdcd487fb1
+        "400": &a1
+          description: Некорректный запрос
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/validation-error
+                title: Некорректный запрос
+                status: 400
+                code: VALIDATION_ERROR
+                detail: Проверьте параметры и обязательные поля.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+        "401": &a2
+          description: Требуется токен
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/unauthenticated
+                title: Требуется токен
+                status: 401
+                code: UNAUTHENTICATED
+                detail: Предъявите действительный JWT.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+        "403": &a3
+          description: Доступ запрещён
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/access-denied
+                title: Доступ запрещён
+                status: 403
+                code: ACCESS_DENIED
+                detail: Токен не даёт права на выполнение операции.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+        "409":
+          description: Ключ операции уже использован
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/idempotency-conflict
+                title: Ключ операции уже использован
+                status: 409
+                code: IDEMPOTENCY_CONFLICT
+                detail: Этот ключ ранее был использован для другого тела.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+        "429": &a4
+          description: Превышен лимит запросов
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/rate-limited
+                title: Превышен лимит запросов
+                status: 429
+                code: RATE_LIMITED
+                detail: Повторите запрос позже.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+        "503": &a5
+          description: Сервис временно недоступен
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/service-unavailable
+                title: Сервис временно недоступен
+                status: 503
+                code: SERVICE_UNAVAILABLE
+                detail: Повторите запрос позже.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+  /api/v1/bookings/{bookingId}:
+    get:
+      tags:
+        - public
+      operationId: getBooking
+      summary: Проверить состояние брони
+      description: Статус доступен владельцу брони. При обработке заявки можно повторять GET раз в две секунды.
+      parameters:
+        - name: bookingId
+          in: path
+          description: Идентификатор заявки
+          required: true
+          schema:
+            type: string
+            description: Идентификатор заявки
+            format: uuid
+          example: c3e2a0b9-e8e0-4460-ab16-d6cdcd487fb1
+      responses:
+        "200":
+          description: Текущее состояние заявки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+              examples:
+                confirmed:
+                  summary: Оба резерва подтверждены
+                  value:
+                    bookingId: c3e2a0b9-e8e0-4460-ab16-d6cdcd487fb1
+                    gameId: e9dc293a-c426-44bb-99fb-97b57a406138
+                    pointId: 138bcbd1-96dc-42ff-aafc-827f5ac4e521
+                    startsOn: 2026-12-01
+                    endsOn: 2026-12-04
+                    slotId: 08a54ab1-a528-4ced-964b-294c6ba61b61
+                    status: CONFIRMED
+                    createdAt: 2026-11-28T10:00:00Z
+                    quote:
+                      tariffVersion: 4
+                      dailyPriceKopecks: 35000
+                      currency: RUB
+                      totalPriceKopecks: 105000
+                cancelled:
+                  summary: Компенсации завершены
+                  value:
+                    bookingId: c3e2a0b9-e8e0-4460-ab16-d6cdcd487fb1
+                    gameId: e9dc293a-c426-44bb-99fb-97b57a406138
+                    pointId: 138bcbd1-96dc-42ff-aafc-827f5ac4e521
+                    startsOn: 2026-12-01
+                    endsOn: 2026-12-04
+                    slotId: 08a54ab1-a528-4ced-964b-294c6ba61b61
+                    status: CANCELLED
+                    createdAt: 2026-11-28T10:00:00Z
+                    failureCode: SLOT_FULL
+        "400": *a1
+        "401": *a2
+        "403": *a3
+        "404":
+          description: Бронь не найдена
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://problem.board-rental.example/booking-not-found
+                title: Бронь не найдена
+                status: 404
+                code: BOOKING_NOT_FOUND
+                detail: Бронь отсутствует или принадлежит другому пользователю.
+                traceId: b16c97c0001d4b3a874d357dfe714c03
+        "429": *a4
+        "503": *a5
+components:
+  securitySchemes:
+    userToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OIDC-токен пользователя Keycloak.
+  schemas:
+    Problem:
+      type: object
+      required:
+        - type
+        - title
+        - status
+        - code
+        - detail
+        - traceId
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          description: URI категории ошибки
+          format: uri
+        title:
+          type: string
+          description: Короткое описание причины
+        status:
+          type: integer
+          minimum: 400
+          description: Код HTTP
+          maximum: 599
+        code:
+          type: string
+          description: Стабильный код для клиента
+          pattern: ^[A-Z][A-Z0-9_]*$
+        detail:
+          type: string
+          description: Описание ошибки в данном запросе
+        traceId:
+          type: string
+          description: Идентификатор трассировки
+          pattern: ^[0-9a-f]{32}$
+    CreateBookingRequest:
+      type: object
+      required:
+        - gameId
+        - pointId
+        - slotId
+        - startsOn
+        - endsOn
+      additionalProperties: false
+      properties:
+        gameId: &a6
+          type: string
+          description: Идентификатор игры
+          format: uuid
+        pointId: &a7
+          type: string
+          description: Идентификатор пункта выдачи
+          format: uuid
+        slotId: &a8
+          type: string
+          description: Идентификатор интервала выдачи
+          format: uuid
+        startsOn: &a9
+          type: string
+          description: Дата начала включительно по Москве
+          format: date
+        endsOn: &a10
+          type: string
+          description: Дата окончания исключительно по Москве
+          format: date
+    BookingAccepted:
+      type: object
+      required:
+        - bookingId
+        - status
+        - statusUrl
+      additionalProperties: false
+      properties:
+        bookingId:
+          type: string
+          description: Идентификатор заявки
+          format: uuid
+        status:
+          type: string
+          description: Состояние на момент приёма
+          enum:
+            - PENDING
+        statusUrl:
+          type: string
+          description: Относительный URL чтения статуса
+    Booking:
+      type: object
+      required:
+        - bookingId
+        - gameId
+        - pointId
+        - slotId
+        - startsOn
+        - endsOn
+        - status
+        - createdAt
+      additionalProperties: false
+      properties:
+        bookingId:
+          type: string
+          description: Идентификатор заявки
+          format: uuid
+        gameId: *a6
+        pointId: *a7
+        slotId: *a8
+        startsOn: *a9
+        endsOn: *a10
+        status:
+          type: string
+          description: Состояние саги
+          enum:
+            - PENDING
+            - CONFIRMED
+            - CANCELLING
+            - CANCELLED
+        createdAt:
+          type: string
+          description: Момент приёма заявки
+          format: date-time
+        quote:
+          $ref: "#/components/schemas/Quote"
+        failureCode:
+          type: string
+          description: Причина отмены. Присутствует в состояниях CANCELLING и CANCELLED.
+          enum:
+            - GAME_UNAVAILABLE
+            - SLOT_UNAVAILABLE
+            - SLOT_FULL
+            - SLOT_EXPIRED
+            - SLOT_MISMATCH
+            - DEPENDENCY_TIMEOUT
+    Quote:
+      type: object
+      required:
+        - tariffVersion
+        - dailyPriceKopecks
+        - currency
+        - totalPriceKopecks
+      additionalProperties: false
+      properties:
+        tariffVersion:
+          type: integer
+          minimum: 1
+          description: Версия действующего тарифа
+        dailyPriceKopecks:
+          type: integer
+          minimum: 0
+          description: Суточный тариф в копейках
+          format: int64
+        currency:
+          type: string
+          description: Код валюты
+          enum:
+            - RUB
+        totalPriceKopecks:
+          type: integer
+          minimum: 0
+          description: Стоимость за весь период в копейках
+          format: int64
