@@ -150,14 +150,3 @@
 | Выдача | [pickup-service.yaml](api/pickup-service.yaml) |
 | Уведомления | [notification-service.yaml](api/notification-service.yaml) |
 | Kafka | [booking-events.asyncapi.yaml](api/booking-events.asyncapi.yaml) |
-
-Для HTTP-ошибок используется единая схема `Problem` с типом `application/problem+json`. Внутренние операции помечены тегом `internal`. Страничные списки начинаются с `page=0`, стандартный размер страницы 20 записей. Контракты содержат примеры ответов и входных данных.
-
-Команды проверки контрактов из корня репозитория.
-
-```text
-npx @redocly/cli@2.83.0 lint
-npx @asyncapi/cli@6.3.1 validate api/booking-events.asyncapi.yaml
-```
-
-Каждый файл OpenAPI можно открыть через импорт локального файла в [Swagger Editor](https://editor.swagger.io/).
