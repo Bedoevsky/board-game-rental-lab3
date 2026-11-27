@@ -81,19 +81,19 @@
 
 | Инициатор → получатель | Тип | Контракт | Назначение |
 | --- | --- | --- | --- |
-| Веб-клиент → Gateway → Keycloak | HTTPS / OIDC | `GET /realms/board-rental/protocol/openid-connect/auth`, `POST /realms/board-rental/protocol/openid-connect/token` | Вход и обмен кода на токен |
-| Gateway и сервисы → Keycloak | HTTPS / OIDC | `GET /realms/board-rental/protocol/openid-connect/certs`, `POST /realms/board-rental/protocol/openid-connect/token` для работника саги | Ключи проверки JWT и токен работника саги |
-| Gateway → Каталог | HTTPS / REST | `GET /api/v1/games` | Список игр |
-| Gateway → Учёт экземпляров | HTTPS / REST | `GET /api/v1/availability` | Доступность игры на период |
-| Gateway → Бронирование | HTTPS / REST | `POST /api/v1/bookings`, `GET /api/v1/bookings/{bookingId}` | Приём заявки и чтение статуса |
-| Gateway → Выдача | HTTPS / REST | `GET /api/v1/pickup-points`, `GET /api/v1/pickup-slots`, `GET /api/v1/pickup-roster` | Адреса пунктов, интервалы и список подтверждённых выдач |
-| Gateway → Уведомления | HTTPS / REST | `GET /api/v1/notifications` | Входящие уведомления |
-| Бронирование → Каталог | HTTPS / REST | `GET /internal/v1/games/{gameId}/tariff` | Снять текущую версию тарифа |
-| Бронирование → Учёт экземпляров | HTTPS / REST | `PUT /internal/v1/inventory-reservations/{bookingId}`, `DELETE /internal/v1/inventory-reservations/{bookingId}` | Установить или снять резерв экземпляра |
-| Бронирование → Выдача | HTTPS / REST | `PUT /internal/v1/pickup-reservations/{bookingId}`, `DELETE /internal/v1/pickup-reservations/{bookingId}` | Установить или снять резерв времени |
-| Бронирование → Kafka → Выдача | Kafka | `rental.booking.events.v1` · `booking.confirmed` | Добавить подтверждённую выдачу в список сотрудников |
-| Бронирование → Kafka → Уведомления | Kafka | `rental.booking.events.v1` · `booking.confirmed`, `booking.cancelled` | Создать уведомление по результату |
-| Уведомления → Telegram Bot API | HTTPS | `POST /bot{token}/sendMessage` | Отправить сообщение в привязанный чат |
+| Веб-клиент → Gateway → Keycloak | sync | `GET /realms/board-rental/protocol/openid-connect/auth`, `POST /realms/board-rental/protocol/openid-connect/token` | Вход и обмен кода на токен |
+| Gateway и сервисы → Keycloak | sync | `GET /realms/board-rental/protocol/openid-connect/certs`, `POST /realms/board-rental/protocol/openid-connect/token` для работника саги | Ключи проверки JWT и токен работника саги |
+| Gateway → Каталог | sync | `GET /api/v1/games` | Список игр |
+| Gateway → Учёт экземпляров | sync | `GET /api/v1/availability` | Доступность игры на период |
+| Gateway → Бронирование | sync | `POST /api/v1/bookings`, `GET /api/v1/bookings/{bookingId}` | Приём заявки и чтение статуса |
+| Gateway → Выдача | sync | `GET /api/v1/pickup-points`, `GET /api/v1/pickup-slots`, `GET /api/v1/pickup-roster` | Адреса пунктов, интервалы и список подтверждённых выдач |
+| Gateway → Уведомления | sync | `GET /api/v1/notifications` | Входящие уведомления |
+| Бронирование → Каталог | sync | `GET /internal/v1/games/{gameId}/tariff` | Снять текущую версию тарифа |
+| Бронирование → Учёт экземпляров | sync | `PUT /internal/v1/inventory-reservations/{bookingId}`, `DELETE /internal/v1/inventory-reservations/{bookingId}` | Установить или снять резерв экземпляра |
+| Бронирование → Выдача | sync | `PUT /internal/v1/pickup-reservations/{bookingId}`, `DELETE /internal/v1/pickup-reservations/{bookingId}` | Установить или снять резерв времени |
+| Бронирование → Kafka → Выдача | async | `rental.booking.events.v1` · `booking.confirmed` | Добавить подтверждённую выдачу в список сотрудников |
+| Бронирование → Kafka → Уведомления | async | `rental.booking.events.v1` · `booking.confirmed`, `booking.cancelled` | Создать уведомление по результату |
+| Уведомления → Telegram Bot API | sync | `POST /bot{token}/sendMessage` | Отправить сообщение в привязанный чат |
 
 ### Сага оформления брони
 
