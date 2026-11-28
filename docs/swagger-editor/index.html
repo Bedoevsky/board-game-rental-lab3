@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Swagger Editor — контракты проката настольных игр</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-editor@4/dist/swagger-editor.css">
+  <style>
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 16px;
+      background: #1b1c2b;
+      color: #f5f6fa;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    }
+    header h1 { font-size: 14px; font-weight: 600; margin: 0; }
+    header a { color: #7c9aff; font-size: 13px; text-decoration: none; }
+    header a:hover { text-decoration: underline; }
+    select {
+      font-size: 13px;
+      padding: 5px 8px;
+      border-radius: 6px;
+      border: 1px solid #44456a;
+      background: #26283f;
+      color: #f5f6fa;
+      min-width: 240px;
+    }
+    #swagger-editor { height: calc(100vh - 53px); }
+    #loading {
+      padding: 24px;
+      font: 14px/1.5 system-ui, sans-serif;
+      color: #555;
+    }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Swagger Editor — редактирование контрактов API</h1>
+    <label for="svc">Сервис:</label>
+    <select id="svc" aria-label="Выбор спецификации"></select>
+    <a href="../swagger-ui/">← Просмотрщик (Swagger UI)</a>
+  </header>
+
+  <div id="loading">Загрузка спецификации…</div>
+  <div id="swagger-editor"></div>
+
+  <script src="https://unpkg.com/swagger-editor@4/dist/swagger-editor-bundle.js"></script>
+  <script>
+    // Загружает исходный YAML из api/ и открывает его в Swagger Editor с живой
+    // валидацией и превью. Работает по HTTP (локальный сервер или GitHub Pages);
+    // при открытии двойным щелчком fetch по file:// запрещён браузером.
+    (async function () {
+      "use strict";
+
+      var services = {
+        "catalog-service": "catalog-service.yaml",
+        "inventory-service": "inventory-service.yaml",
+        "booking-service": "booking-service.yaml",
+        "pickup-service": "pickup-service.yaml",
+        "notification-service": "notification-service.yaml"
+      };
+
+      var params = new URLSearchParams(location.search);
+      var requested = params.get("service");
+      var id = services[requested] ? requested : "catalog-service";
+
+      var select = document.getElementById("svc");
+      Object.keys(services).forEach(function (key) {
+        var option = document.createElement("option");
+        option.value = key;
+        option.textContent = key;
+        select.appendChild(option);
+      });
+      select.value = id;
+      select.addEventListener("change", function () {
+        location.search = "?service=" + encodeURIComponent(select.value);
+      });
+
+      var response = await fetch("../../api/" + services[id]);
+      var yaml = await response.text();
+      document.getElementById("loading").hidden = true;
+
+      window.editor = SwaggerEditorBundle({
+        dom_id: "#swagger-editor",
+        layout: "EditorLayout"
+      });
+
+      // SwaggerEditorBundle грузит дефолтный Petstore, а опция spec текст не принимает,
+      // поэтому вставляем наш YAML прямо в Ace — редактор сам распарсит изменение.
+      var attempts = 0;
+      var timer = setInterval(function () {
+        var el = document.querySelector("#swagger-editor .ace_editor");
+        if (el && el.env && el.env.editor) {
+          clearInterval(timer);
+          var ace = el.env.editor;
+          ace.setValue(yaml, -1);
+          ace.moveCursorTo(0, 0);
+        } else if (++attempts > 100) {
+          clearInterval(timer);
+          console.error("Ace editor не появился за 10 секунд");
+        }
+      }, 100);
+    })();
+  </script>
+</body>
+</html>

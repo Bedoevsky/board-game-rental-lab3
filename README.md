@@ -163,3 +163,5 @@
 npm install
 npm run build:docs
 ```
+
+Для правки контрактов с живой валидацией и превью есть [docs/swagger-editor/index.html](docs/swagger-editor/index.html) — Swagger Editor, который загружает исходный YAML из `api/`. Страница работает по HTTP (локальный сервер или [GitHub Pages](https://bedoevsky.github.io/board-game-rental-lab3/docs/swagger-editor/)), а сервис выбирается в шапке. События Kafka в Swagger Editor не открываются — для них используется AsyncAPI-вкладка просмотрщика или [studio.asyncapi.com](https://studio.asyncapi.com/).
