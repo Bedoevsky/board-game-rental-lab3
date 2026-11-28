@@ -155,7 +155,7 @@
 
 Все контракты собраны в один просмотрщик [docs/swagger-ui/index.html](docs/swagger-ui/index.html): REST-сервисы показаны в Swagger UI, события Kafka — в AsyncAPI UI, переключение между спецификациями через список в шапке.
 
-Страница работает без интернета и сервера — достаточно открыть её двойным щелчком, бандлы Swagger UI 5.36.0 и AsyncAPI React Component 3.2.3 лежат в том же каталоге. Если для репозитория включён GitHub Pages, страница также доступна по адресу `https://bedoevsky.github.io/board-game-rental-lab3/docs/swagger-ui/`.
+Страница работает без интернета и сервера — достаточно открыть её двойным щелчком, бандлы Swagger UI 5.36.0 и AsyncAPI React Component 3.2.3 лежат в том же каталоге. Публичная копия опубликована через GitHub Pages: [bedoevsky.github.io/board-game-rental-lab3/docs/swagger-ui](https://bedoevsky.github.io/board-game-rental-lab3/docs/swagger-ui/).
 
 Просмотрщик читает спецификации из `docs/swagger-ui/specs.js`, а не из `api/*.yaml`: YAML-якоря и алиасы (`&a1`, `*a2`) нужно предварительно развернуть, а при открытии файла напрямую браузер не сможет загрузить схему по HTTP. После правки `api/*.yaml` пересоберите бандл:
 
