@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Контракты API — прокат настольных игр</title>
+  <link rel="stylesheet" href="swagger-ui-dist/swagger-ui.css">
+  <link rel="stylesheet" href="asyncapi/default.min.css">
+  <style>
+    :root {
+      --header-bg: #1b1c2b;
+      --header-fg: #f5f6fa;
+      --accent: #7c9aff;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 20px;
+      background: var(--header-bg);
+      color: var(--header-fg);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    }
+    header h1 { font-size: 16px; font-weight: 600; margin: 0; }
+    header .spacer { flex: 1; }
+    header a {
+      color: var(--accent);
+      font-size: 13px;
+      text-decoration: none;
+    }
+    header a:hover { text-decoration: underline; }
+    select {
+      font-size: 14px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid #44456a;
+      background: #26283f;
+      color: var(--header-fg);
+      min-width: 340px;
+    }
+    main { min-height: 60vh; }
+    #swagger-root, #asyncapi-root { padding: 0 8px; }
+    #asyncapi-root .aui-root { margin: 0 auto; }
+    footer {
+      padding: 10px 20px;
+      font-size: 12px;
+      color: #666;
+      border-top: 1px solid #e0e0e0;
+    }
+    footer code { background: #f2f2f5; padding: 1px 5px; border-radius: 4px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Прокат настольных игр — контракты API</h1>
+    <label for="spec-select" style="font-size:13px;opacity:.75">Сервис:</label>
+    <select id="spec-select" aria-label="Выбор спецификации">
+      <optgroup label="REST — OpenAPI 3.0">
+        <option value="catalog-service">catalog-service — каталог игр</option>
+        <option value="inventory-service">inventory-service — экземпляры</option>
+        <option value="booking-service">booking-service — бронирование</option>
+        <option value="pickup-service">pickup-service — выдача</option>
+        <option value="notification-service">notification-service — уведомления</option>
+      </optgroup>
+      <optgroup label="События — AsyncAPI 3.1">
+        <option value="booking-events">rental.booking.events.v1 — Kafka</option>
+      </optgroup>
+    </select>
+    <span class="spacer"></span>
+    <a href="https://github.com/Bedoevsky/board-game-rental-lab3/tree/main/api">Исходники схем: api/*.yaml</a>
+  </header>
+
+  <main>
+    <div id="swagger-root"></div>
+    <div id="asyncapi-root" class="aui-root" hidden></div>
+  </main>
+
+  <footer>
+    Бандлы Swagger UI 5.36.0 (Apache-2.0) и AsyncAPI React Component 3.2.3 (MIT) лежат рядом со страницей,
+    поэтому она работает без интернета. Спецификации собраны из <code>api/*.yaml</code> командой
+    <code>npm run build:docs</code>.
+  </footer>
+
+  <script src="swagger-ui-dist/swagger-ui-bundle.js"></script>
+  <script src="asyncapi/async-api.js"></script>
+  <script src="specs.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

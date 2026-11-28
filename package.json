@@ -1,0 +1,12 @@
+{
+  "name": "board-game-rental-lab3",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Утилиты сборки интерактивной документации в docs/swagger-ui.",
+  "scripts": {
+    "build:docs": "node scripts/build-swagger-specs.mjs"
+  },
+  "devDependencies": {
+    "js-yaml": "^4.1.0"
+  }
+}
